@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API 测试</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .result { background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .error { color: red; }
+        .success { color: green; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        input { padding: 8px; width: 300px; margin: 5px 0; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Course AI Helper - API 测试</h1>
+    
+    <div>
+        <h3>1. 登录</h3>
+        <input type="text" id="username" placeholder="用户名" value="testuser2"><br>
+        <input type="password" id="password" placeholder="密码" value="password123"><br>
+        <button onclick="login()">登录</button>
+    </div>
+    
+    <div>
+        <h3>2. 获取视频列表</h3>
+        <button onclick="getVideos()">获取视频</button>
+        <button onclick="scanVideos()">扫描视频</button>
+    </div>
+    
+    <div>
+        <h3>结果</h3>
+        <div id="result" class="result">等待操作...</div>
+    </div>
+
+    <script>
+        let token = '';
+        
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    token = data.access_token;
+                    document.getElementById('result').innerHTML = 
+                        `<div class="success">✅ 登录成功！<br>Token: ${token.substring(0, 50)}...</div>`;
+                    localStorage.setItem('token', token);
+                } else {
+                    document.getElementById('result').innerHTML = 
+                        `<div class="error">❌ 登录失败：${data.detail}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('result').innerHTML = 
+                    `<div class="error">❌ 错误：${error.message}</div>`;
+            }
+        }
+        
+        async function getVideos() {
+            if (!token) {
+                token = localStorage.getItem('token');
+                if (!token) {
+                    document.getElementById('result').innerHTML = 
+                        `<div class="error">❌ 请先登录</div>`;
+                    return;
+                }
+            }
+            
+            try {
+                const response = await fetch('/api/videos', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    if (data.length === 0) {
+                        document.getElementById('result').innerHTML = 
+                            `<div class="error">⚠️ 没有找到视频，请先扫描</div>`;
+                    } else {
+                        let html = `<div class="success">✅ 找到 ${data.length} 个视频：</div>`;
+                        data.forEach(video => {
+                            html += `<div class="result">
+                                <strong>${video.filename}</strong><br>
+                                状态：${video.status}<br>
+                                大小：${(video.file_size / 1024 / 1024).toFixed(1)} MB<br>
+                                字幕：${video.has_subtitle ? '✅' : '⏳'} 
+                                总结：${video.has_summary ? '✅' : '⏳'}
+                            </div>`;
+                        });
+                        document.getElementById('result').innerHTML = html;
+                    }
+                } else {
+                    document.getElementById('result').innerHTML = 
+                        `<div class="error">❌ 获取失败：${data.detail}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('result').innerHTML = 
+                    `<div class="error">❌ 错误：${error.message}</div>`;
+            }
+        }
+        
+        async function scanVideos() {
+            if (!token) {
+                token = localStorage.getItem('token');
+            }
+            
+            try {
+                const response = await fetch('/api/videos/scan', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    document.getElementById('result').innerHTML = 
+                        `<div class="success">
+                            ✅ 扫描完成！<br>
+                            找到：${data.scanned_count} 个文件<br>
+                            新增：${data.new_count} 个视频
+                        </div>`;
+                } else {
+                    document.getElementById('result').innerHTML = 
+                        `<div class="error">❌ 扫描失败：${data.detail}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('result').innerHTML = 
+                    `<div class="error">❌ 错误：${error.message}</div>`;
+            }
+        }
+        
+        // 页面加载时检查 token
+        window.onload = () => {
+            const savedToken = localStorage.getItem('token');
+            if (savedToken) {
+                token = savedToken;
+                document.getElementById('result').innerHTML = 
+                    `<div class="success">✅ 已找到保存的 Token，可以直接获取视频</div>`;
+            }
+        };
+    </script>
+</body>
+</html>

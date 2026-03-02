@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: light dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #242424;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* 自定义滚动条 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* 视频播放器自定义 */
+.video-js {
+  width: 100%;
+  height: 100%;
+}
+
+/* 知识点标记点样式 */
+.knowledge-point-marker {
+  position: absolute;
+  bottom: 8px;
+  width: 4px;
+  height: 12px;
+  background-color: #3b82f6;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.knowledge-point-marker:hover {
+  background-color: #2563eb;
+  height: 16px;
+}

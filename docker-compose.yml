@@ -1,0 +1,99 @@
+version: '3.8'
+
+services:
+  # 后端服务
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: course-ai-backend
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///app/data/course_ai.db
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-me}
+      - DEFAULT_LLM_BACKEND=${DEFAULT_LLM_BACKEND:-local}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    volumes:
+      - ./data:/app/data
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - ollama
+    networks:
+      - course-ai-network
+    restart: unless-stopped
+
+  # 前端服务
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: course-ai-frontend
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - course-ai-network
+    restart: unless-stopped
+
+  # Ollama 服务（本地 LLM）
+  ollama:
+    image: ollama/ollama:latest
+    container_name: course-ai-ollama
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    networks:
+      - course-ai-network
+    restart: unless-stopped
+    # 如果有 GPU，取消注释以下行
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  # PostgreSQL 数据库（可选，生产环境使用）
+  # postgres:
+  #   image: postgres:15-alpine
+  #   container_name: course-ai-postgres
+  #   environment:
+  #     - POSTGRES_USER=courseai
+  #     - POSTGRES_PASSWORD=your-password
+  #     - POSTGRES_DB=course_ai
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   ports:
+  #     - "5432:5432"
+  #   networks:
+  #     - course-ai-network
+  #   restart: unless-stopped
+
+  # ChromaDB 向量数据库（可选，独立部署）
+  # chromadb:
+  #   image: chromadb/chroma:latest
+  #   container_name: course-ai-chromadb
+  #   volumes:
+  #     - chroma_data:/chroma/chroma
+  #   ports:
+  #     - "8001:8000"
+  #   networks:
+  #     - course-ai-network
+  #   restart: unless-stopped
+
+volumes:
+  ollama_data:
+  # postgres_data:
+  # chroma_data:
+
+networks:
+  course-ai-network:
+    driver: bridge
