@@ -9,8 +9,6 @@ export default function VideoPlayerPage() {
   console.log('🎬 [VideoPlayerPage] 页面加载，video id:', id)
   
   const navigate = useNavigate()
-  const { id } = useParams<{ id: string }>()
-  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<'summary' | 'notes'>('summary')
   const [newNote, setNewNote] = useState('')
