@@ -5,9 +5,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from typing import List, Optional
 from pathlib import Path
+from datetime import datetime
 import os
 import re
 import aiofiles
+
+# Celery 导入
+from app.core.celery_app import celery_app
 
 from ..db.base import get_db
 from ..models.video import Video, VideoStatus
@@ -306,12 +310,11 @@ async def get_summary(
 @router.post("/{video_id}/process")
 async def process_video(
     video_id: int,
-    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_dependency)
 ):
-    """处理视频（生成字幕 + 总结）"""
-    from ..services.processor import process_video_task
+    """处理视频（异步任务队列）"""
+    from app.tasks.video_tasks import process_video_task
     
     # 检查视频是否存在
     result = await db.execute(select(Video).where(Video.id == video_id))
@@ -327,14 +330,63 @@ async def process_video(
             "status": video.status,
         }
     
-    # 添加到后台任务
-    background_tasks.add_task(process_video_task, video_id, db)
+    # 更新状态为处理中
+    video.status = VideoStatus.SUBTITLING
+    video.updated_at = datetime.utcnow()
+    await db.commit()
+    
+    # 启动 Celery 异步任务
+    task = process_video_task.delay(video_id)
+    
+    logger.info(f"🚀 视频处理任务已启动：video_id={video_id}, task_id={task.id}")
     
     return {
-        "message": "视频处理已启动",
+        "message": "视频处理已启动（异步）",
         "video_id": video_id,
-        "status": "processing",
+        "task_id": task.id,
+        "status": "queued",
+        "check_status_url": f"/api/videos/{video_id}/process/status",
     }
+
+
+@router.get("/{video_id}/process/status")
+async def get_process_status(
+    video_id: int,
+    task_id: str = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user_dependency)
+):
+    """获取视频处理进度"""
+    from app.tasks.video_tasks import get_task_progress
+    from celery.result import AsyncResult
+    
+    # 检查视频是否存在
+    result = await db.execute(select(Video).where(Video.id == video_id))
+    video = result.scalar_one_or_none()
+    
+    if not video:
+        raise HTTPException(status_code=404, detail="视频不存在")
+    
+    # 获取视频当前状态
+    status_info = {
+        "video_id": video_id,
+        "video_status": video.status,
+        "has_subtitle": video.has_subtitle,
+        "has_summary": video.has_summary,
+        "error_message": video.error_message,
+        "processed_at": video.processed_at,
+    }
+    
+    # 如果有 task_id，获取 Celery 任务状态
+    if task_id:
+        task_result = AsyncResult(task_id, app=celery_app)
+        status_info["task"] = {
+            "task_id": task_id,
+            "status": task_result.status,
+            "ready": task_result.ready(),
+        }
+    
+    return status_info
 
 
 from fastapi import BackgroundTasks
