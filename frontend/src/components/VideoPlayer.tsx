@@ -33,6 +33,8 @@ export default function VideoPlayer({
   jumpToTime,
   onTimeJump,
 }: VideoPlayerProps) {
+  console.log('🎥 [VideoPlayer] 组件渲染，src:', src)
+  console.log('🎥 [VideoPlayer] 参数:', { src, poster, subtitles: subtitles?.length, knowledgePoints: knowledgePoints?.length })
   const videoRef = useRef<HTMLVideoElement>(null)
   const playerRef = useRef<any>(null)
   const [currentSubtitle, setCurrentSubtitle] = useState<string>('')
@@ -41,6 +43,8 @@ export default function VideoPlayer({
   const [error, setError] = useState<string>('')
 
   // 初始化 Video.js
+  console.log('⚙️ [VideoPlayer] 开始初始化 Video.js')
+  console.log('⚙️ [VideoPlayer] videoRef:', videoRef.current ? '存在' : '不存在')
   useEffect(() => {
     if (!videoRef.current) return
 
@@ -70,6 +74,7 @@ export default function VideoPlayer({
 
       // 监听错误
       const handleError = () => {
+        console.error('❌ [VideoPlayer] 视频播放错误')
         const error = playerRef.current.error()
         if (error) {
           setError(`视频加载失败：${error.message}`)

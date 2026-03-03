@@ -6,6 +6,10 @@ import VideoPlayer from '../components/VideoPlayer'
 
 export default function VideoPlayerPage() {
   const { id } = useParams<{ id: string }>()
+  console.log('🎬 [VideoPlayerPage] 页面加载，video id:', id)
+  
+  const navigate = useNavigate()
+  const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<'summary' | 'notes'>('summary')
@@ -13,7 +17,21 @@ export default function VideoPlayerPage() {
   const [jumpToTime, setJumpToTime] = useState<number | null>(null)
 
   // 获取视频详情
-  const { data: video, isLoading: videoLoading } = useQuery({
+  const { data: video, isLoading: videoLoading, error: videoError } = useQuery({
+    queryKey: ['video', id],
+    queryFn: async () => {
+      console.log('📹 [VideoPlayerPage] 开始获取视频数据，id:', id)
+      try {
+        const result = await videoApi.get(Number(id))
+        console.log('✅ [VideoPlayerPage] 视频数据获取成功:', result.data?.filename)
+        return result.data
+      } catch (error) {
+        console.error('❌ [VideoPlayerPage] 视频数据获取失败:', error)
+        throw error
+      }
+    },
+    enabled: !!id,
+  })
     queryKey: ['video', id],
     queryFn: () => videoApi.get(Number(id)),
     enabled: !!id,
