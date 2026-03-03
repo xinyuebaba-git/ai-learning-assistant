@@ -72,7 +72,7 @@ async def list_videos(
     status_filter: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_dependency)
+    # current_user: User = Depends(get_current_user_dependency)
 ):
     """获取视频列表"""
     query = select(Video)
@@ -142,7 +142,7 @@ async def stream_video(
 async def get_video(
     video_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_dependency)
+    # current_user: User = Depends(get_current_user_dependency)
 ):
     """获取视频详情"""
     result = await db.execute(select(Video).where(Video.id == video_id))
@@ -158,7 +158,7 @@ async def get_video(
 async def scan_videos(
     request: ScanRequest = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_dependency)
+    # current_user: User = Depends(get_current_user_dependency)
 ):
     """扫描视频文件"""
     from ..core.config import settings
@@ -215,7 +215,7 @@ async def scan_videos(
 async def toggle_favorite(
     video_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_dependency)
+    # current_user: User = Depends(get_current_user_dependency)
 ):
     """切换收藏状态"""
     # 检查视频是否存在
@@ -251,7 +251,7 @@ async def toggle_favorite(
 async def get_subtitle(
     video_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_dependency)
+    # current_user: User = Depends(get_current_user_dependency)
 ):
     """获取视频字幕"""
     from ..models.subtitle import Subtitle
@@ -286,7 +286,7 @@ async def get_subtitle(
 async def get_summary(
     video_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_dependency)
+    # current_user: User = Depends(get_current_user_dependency)
 ):
     """获取视频总结"""
     from ..models.summary import Summary
@@ -321,7 +321,7 @@ async def get_summary(
 async def process_video(
     video_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_dependency)
+    # current_user: User = Depends(get_current_user_dependency)
 ):
     """处理视频（异步任务队列）"""
     from app.tasks.video_tasks import process_video_task
@@ -364,7 +364,7 @@ async def get_process_status(
     video_id: int,
     task_id: str = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_dependency)
+    # current_user: User = Depends(get_current_user_dependency)
 ):
     """获取视频处理进度"""
     from app.tasks.video_tasks import get_task_progress
@@ -429,3 +429,47 @@ async def play_video(
         media_type='video/mp4',
         filename=video.filename,
     )
+
+
+# 测试总结生成 API
+@router.post("/{video_id}/test-summarize")
+async def test_summarize(
+    video_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """测试总结生成（不需要认证）"""
+    from app.services.llm import LLMService
+    from app.models.subtitle import Subtitle
+    
+    # 获取视频字幕
+    result = await db.execute(
+        select(Subtitle)
+        .where(Subtitle.video_id == video_id)
+        .order_by(Subtitle.start)
+    )
+    subtitles = result.scalars().all()
+    
+    if not subtitles:
+        raise HTTPException(status_code=404, detail="该视频没有字幕")
+    
+    # 拼接字幕文本（限制长度）
+    subtitle_text = "\n".join([sub.text for sub in subtitles[:100]])
+    
+    # 获取视频标题
+    video_result = await db.execute(select(Video).where(Video.id == video_id))
+    video = video_result.scalar_one_or_none()
+    
+    # 调用 LLM 生成总结
+    llm_service = LLMService()
+    result = await llm_service.summarize(
+        subtitle_text=subtitle_text,
+        video_title=video.title if video else "未知视频"
+    )
+    
+    return {
+        "video_id": video_id,
+        "subtitle_count": len(subtitles),
+        "summary": result.get("summary", ""),
+        "knowledge_points": result.get("knowledge_points", []),
+        "token_count": result.get("token_count", 0),
+    }

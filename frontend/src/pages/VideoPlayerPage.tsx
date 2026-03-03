@@ -29,8 +29,19 @@ export default function VideoPlayerPage() {
   // 获取总结（总是尝试获取，由 API 决定是否返回 404）
   const { data: summaryData, error: summaryError } = useQuery({
     queryKey: ['summary', id],
-    queryFn: () => videoApi.getSummary(Number(id)),
-    retry: false, // 失败不重试
+    queryFn: async () => {
+      const result = await videoApi.getSummary(Number(id))
+      // 解析知识点 JSON 字符串
+      if (result.data && typeof result.data.knowledge_points === 'string') {
+        try {
+          result.data.knowledge_points = JSON.parse(result.data.knowledge_points)
+        } catch (e) {
+          console.error('解析知识点失败:', e)
+          result.data.knowledge_points = []
+        }
+      }
+      return result.data
+    },
   })
 
   // 获取笔记
