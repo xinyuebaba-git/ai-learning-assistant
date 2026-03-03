@@ -21,6 +21,8 @@ interface VideoPlayerProps {
   poster?: string
   subtitles?: Subtitle[]
   knowledgePoints?: KnowledgePoint[]
+  jumpToTime?: number | null
+  onTimeJump?: () => void
 }
 
 export default function VideoPlayer({
@@ -28,6 +30,8 @@ export default function VideoPlayer({
   poster = '',
   subtitles = [],
   knowledgePoints = [],
+  jumpToTime,
+  onTimeJump,
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLDivElement>(null)
   const playerRef = useRef<any>(null)
@@ -68,6 +72,17 @@ export default function VideoPlayer({
       }
     }
   }, [src, poster, subtitles])
+
+  // 跳转时间
+  useEffect(() => {
+    if (jumpToTime !== undefined && jumpToTime !== null && playerRef.current) {
+      playerRef.current.currentTime(jumpToTime)
+      playerRef.current.play()
+      if (onTimeJump) {
+        onTimeJump()
+      }
+    }
+  }, [jumpToTime, onTimeJump])
 
   // 跳转到知识点
   const jumpToKnowledgePoint = (timestamp: number) => {

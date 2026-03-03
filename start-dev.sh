@@ -61,14 +61,16 @@ if [ ! -d "backend/.venv" ]; then
     print_info "创建 Python 虚拟环境..."
     cd backend
     python3 -m venv .venv
+    cd ..
     print_success "虚拟环境已创建"
 fi
 
 print_info "安装/更新 Python 依赖..."
+cd backend
 source .venv/bin/activate
 pip install -q -r requirements.txt
-print_success "Python 依赖已安装"
 cd ..
+print_success "Python 依赖已安装"
 
 # 步骤 4: 检查并安装 Node 依赖
 print_info "步骤 4/7: 检查 Node 依赖..."

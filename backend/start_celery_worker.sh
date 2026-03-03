@@ -33,12 +33,13 @@ echo "   并发数：4"
 echo ""
 
 # 启动 Worker（监听所有队列）
+# 使用默认进程池（prefork）
 celery -A app.core.celery_app worker \
     --loglevel=info \
     --queues=video_processing,asr,llm \
     --concurrency=4 \
-    --pool=gevent \
     --hostname=worker1@%h
 
-# 备选方案（如果 gevent 不可用）
-# celery -A app.core.celery_app worker -l info -Q video_processing,asr,llm -c 4
+# 备选方案（如果需要 gevent）
+# pip install gevent
+# celery -A app.core.celery_app worker --pool=gevent --concurrency=100
