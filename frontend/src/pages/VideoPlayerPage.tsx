@@ -30,10 +30,6 @@ export default function VideoPlayerPage() {
     },
     enabled: !!id,
   })
-    queryKey: ['video', id],
-    queryFn: () => videoApi.get(Number(id)),
-    enabled: !!id,
-  })
 
   // 获取字幕
   const { data: subtitleData } = useQuery({
