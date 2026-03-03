@@ -26,11 +26,11 @@ export default function VideoPlayerPage() {
     enabled: !!video?.has_subtitle,
   })
 
-  // 获取总结
+  // 获取总结（总是尝试获取，由 API 决定是否返回 404）
   const { data: summaryData } = useQuery({
     queryKey: ['summary', id],
     queryFn: () => videoApi.getSummary(Number(id)),
-    enabled: !!video?.has_summary,
+    retry: false, // 失败不重试
   })
 
   // 获取笔记
