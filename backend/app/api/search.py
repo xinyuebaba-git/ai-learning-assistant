@@ -34,7 +34,12 @@ class SearchResponse(BaseModel):
 
 # ============ API 路由 ============
 
-@router.get("", response_model=SearchResponse)
+# @router.get("", response_model=SearchResponse)  # 临时禁用
+async def search_disabled():
+    # 临时返回空结果，避免 ChromaDB 兼容性问题
+    return {"results": [], "total": 0}
+async def search_disabled():
+    return {"results": [], "message": "搜索功能维护中"}
 async def search_videos(
     q: str = Query(..., min_length=1, description="搜索关键词"),
     limit: int = Query(20, ge=1, le=100),
