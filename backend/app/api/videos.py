@@ -107,9 +107,8 @@ import aiofiles
 async def stream_video(
     video_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_dependency)
 ):
-    """视频流式传输 - 支持 Range 请求"""
+    """视频流式传输 - 支持 Range 请求（不需要认证）"""
     from fastapi import Request
     
     # 获取视频信息
@@ -403,3 +402,30 @@ async def get_process_status(
 from fastapi import BackgroundTasks
 
 
+
+
+# 新的视频流端点（不需要认证）
+@router.get("/{video_id}/play")
+async def play_video(
+    video_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """视频播放 - 不需要认证"""
+    # 获取视频信息
+    result = await db.execute(select(Video).where(Video.id == video_id))
+    video = result.scalar_one_or_none()
+    
+    if not video:
+        raise HTTPException(status_code=404, detail="视频不存在")
+    
+    # 检查文件是否存在
+    video_path = Path(video.filepath)
+    if not video_path.exists():
+        raise HTTPException(status_code=404, detail="视频文件不存在")
+    
+    # 使用 FileResponse 自动处理 Range 请求
+    return FileResponse(
+        str(video_path),
+        media_type='video/mp4',
+        filename=video.filename,
+    )

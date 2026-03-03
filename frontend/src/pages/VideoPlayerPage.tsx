@@ -123,13 +123,12 @@ export default function VideoPlayerPage() {
           <div className="flex-1 min-w-0">
             <div className="bg-black rounded-lg overflow-hidden shadow-lg sticky top-4">
               <VideoPlayer
-                src={`/api/videos/${video.id}/stream`}
+                src={`/api/videos/${video.id}/play`}
                 poster=""
                 subtitles={subtitleData?.subtitles || []}
                 knowledgePoints={summaryData?.knowledge_points || []}
                 jumpToTime={jumpToTime}
                 onTimeJump={() => setJumpToTime(null)}
-                withAuth={true}
               />
             </div>
 

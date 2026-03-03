@@ -23,7 +23,6 @@ interface VideoPlayerProps {
   knowledgePoints?: KnowledgePoint[]
   jumpToTime?: number | null
   onTimeJump?: () => void
-  withAuth?: boolean  // 是否需要认证
 }
 
 export default function VideoPlayer({
@@ -33,7 +32,6 @@ export default function VideoPlayer({
   knowledgePoints = [],
   jumpToTime,
   onTimeJump,
-  withAuth = false,
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLDivElement>(null)
   const playerRef = useRef<any>(null)
@@ -54,8 +52,6 @@ export default function VideoPlayer({
 
     try {
       // 初始化 Video.js
-      const token = withAuth ? localStorage.getItem('token') : null
-      
       playerRef.current = videojs(videoRef.current, {
         autoplay: false,
         controls: true,
@@ -64,7 +60,7 @@ export default function VideoPlayer({
         poster,
         preload: 'auto',
         sources: [{
-          src: withAuth && token ? `${src}?token=${token}` : src,
+          src,
           type: 'video/mp4',
         }],
         html5: {
