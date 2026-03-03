@@ -100,6 +100,8 @@ async def list_videos(
 # ============ 视频流 API ============
 
 from fastapi.responses import FileResponse, StreamingResponse
+from starlette.responses import Response
+import aiofiles
 
 @router.get("/{video_id}/stream")
 async def stream_video(
@@ -108,6 +110,8 @@ async def stream_video(
     current_user: Optional[User] = Depends(get_current_user_dependency)
 ):
     """视频流式传输 - 支持 Range 请求"""
+    from fastapi import Request
+    
     # 获取视频信息
     result = await db.execute(select(Video).where(Video.id == video_id))
     video = result.scalar_one_or_none()
@@ -120,11 +124,18 @@ async def stream_video(
     if not video_path.exists():
         raise HTTPException(status_code=404, detail="视频文件不存在")
     
+    # 获取文件大小
+    file_size = video_path.stat().st_size
+    
     # 使用 FileResponse 自动处理 Range 请求
     return FileResponse(
         str(video_path),
         media_type='video/mp4',
         filename=video.filename,
+        headers={
+            'Accept-Ranges': 'bytes',
+            'Content-Length': str(file_size),
+        },
     )
 
 

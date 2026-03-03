@@ -27,7 +27,7 @@ export default function VideoPlayerPage() {
   })
 
   // 获取总结（总是尝试获取，由 API 决定是否返回 404）
-  const { data: summaryData } = useQuery({
+  const { data: summaryData, error: summaryError } = useQuery({
     queryKey: ['summary', id],
     queryFn: () => videoApi.getSummary(Number(id)),
     retry: false, // 失败不重试
@@ -129,6 +129,7 @@ export default function VideoPlayerPage() {
                 knowledgePoints={summaryData?.knowledge_points || []}
                 jumpToTime={jumpToTime}
                 onTimeJump={() => setJumpToTime(null)}
+                withAuth={true}
               />
             </div>
 
@@ -190,26 +191,26 @@ export default function VideoPlayerPage() {
                       <>
                         {summaryData.content && (
                           <div>
-                            <h3 className="text-sm font-semibold text-gray-700 mb-2">课程总结</h3>
-                            <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                            <h3 className="text-sm font-semibold text-gray-700 mb-2">📝 课程总结</h3>
+                            <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed bg-gray-50 p-3 rounded-md">
                               {summaryData.content}
-                            </p>
+                            </div>
                           </div>
                         )}
 
                         {summaryData.knowledge_points && summaryData.knowledge_points.length > 0 && (
                           <div>
-                            <h3 className="text-sm font-semibold text-gray-700 mb-3">🎯 知识点列表</h3>
+                            <h3 className="text-sm font-semibold text-gray-700 mb-3">🎯 知识点列表 ({summaryData.knowledge_points.length})</h3>
                             <div className="space-y-2">
                               {summaryData.knowledge_points.map((kp: any, index: number) => (
                                 <div
                                   key={index}
                                   onClick={() => handleJumpToTime(kp.timestamp)}
-                                  className="p-3 bg-blue-50 rounded-md cursor-pointer hover:bg-blue-100 transition-colors"
+                                  className="p-3 bg-blue-50 rounded-md cursor-pointer hover:bg-blue-100 transition-colors border border-blue-100"
                                 >
                                   <div className="flex items-center justify-between mb-1">
                                     <span className="text-sm font-medium text-gray-900">{kp.title}</span>
-                                    <span className="text-xs text-primary-600 bg-white px-2 py-0.5 rounded">
+                                    <span className="text-xs text-primary-600 bg-white px-2 py-0.5 rounded font-mono">
                                       {Math.floor(kp.timestamp / 60)}:{String(Math.floor(kp.timestamp % 60)).padStart(2, '0')}
                                     </span>
                                   </div>
@@ -217,16 +218,23 @@ export default function VideoPlayerPage() {
                                     <p className="text-xs text-gray-600 mt-1">{kp.description}</p>
                                   )}
                                   {kp.type && (
-                                    <span className="inline-block mt-2 px-2 py-0.5 bg-white text-xs rounded text-gray-600">
-                                      {kp.type === 'concept' ? '概念' :
-                                       kp.type === 'formula' ? '公式' :
-                                       kp.type === 'example' ? '示例' :
-                                       kp.type === 'key_point' ? '重点' : kp.type}
+                                    <span className="inline-block mt-2 px-2 py-0.5 bg-white text-xs rounded text-gray-600 border border-gray-200">
+                                      {kp.type === 'concept' ? '📖 概念' :
+                                       kp.type === 'formula' ? '📐 公式' :
+                                       kp.type === 'example' ? '💡 示例' :
+                                       kp.type === 'key_point' ? '⭐ 重点' : kp.type}
                                     </span>
                                   )}
                                 </div>
                               ))}
                             </div>
+                          </div>
+                        )}
+
+                        {!summaryData.content && (!summaryData.knowledge_points || summaryData.knowledge_points.length === 0) && (
+                          <div className="text-center py-8">
+                            <div className="text-4xl mb-2">📝</div>
+                            <p className="text-gray-500 text-sm">总结内容为空</p>
                           </div>
                         )}
                       </>
@@ -236,6 +244,13 @@ export default function VideoPlayerPage() {
                         <p className="text-gray-500 text-sm">
                           {video.has_summary ? '总结加载中...' : '暂无总结'}
                         </p>
+                        {summaryError && (
+                          <p className="text-gray-400 text-xs mt-2">
+                            {(summaryError as any)?.response?.status === 404 
+                              ? '该视频尚未生成总结'
+                              : '加载失败，请稍后重试'}
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>
