@@ -7,6 +7,7 @@ import VideoPlayer from '../components/VideoPlayer'
 export default function VideoPlayerPage() {
   const { id } = useParams<{ id: string }>()
   console.log('🎬 [VideoPlayerPage] 页面加载，video id:', id)
+  alert('🎬 VideoPlayerPage 加载，id=' + id)
   
   const navigate = useNavigate()
   const queryClient = useQueryClient()

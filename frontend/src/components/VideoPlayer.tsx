@@ -34,6 +34,7 @@ export default function VideoPlayer({
   onTimeJump,
 }: VideoPlayerProps) {
   console.log('🎥 [VideoPlayer] 组件渲染，src:', src)
+  alert('🎥 VideoPlayer 渲染，src=' + src)
   console.log('🎥 [VideoPlayer] 参数:', { src, poster, subtitles: subtitles?.length, knowledgePoints: knowledgePoints?.length })
   const videoRef = useRef<HTMLVideoElement>(null)
   const playerRef = useRef<any>(null)
@@ -63,7 +64,10 @@ export default function VideoPlayer({
         fluid: true,
         poster,
         preload: 'auto',
-        // sources 已在 HTML 中定义
+        sources: [{
+          src,
+          type: 'video/mp4',
+        }],
         html5: {
           hls: {
             enableLowInitialPlaylist: true,
