@@ -33,7 +33,7 @@ export default function VideoPlayer({
   jumpToTime,
   onTimeJump,
 }: VideoPlayerProps) {
-  const videoRef = useRef<HTMLDivElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
   const playerRef = useRef<any>(null)
   const [currentSubtitle, setCurrentSubtitle] = useState<string>('')
   const [showSubtitles, setShowSubtitles] = useState(true)
@@ -52,17 +52,14 @@ export default function VideoPlayer({
 
     try {
       // 初始化 Video.js
-      playerRef.current = videojs(videoRef.current, {
+      playerRef.current = videojs(videoRef.current!, {
         autoplay: false,
         controls: true,
         responsive: true,
         fluid: true,
         poster,
         preload: 'auto',
-        sources: [{
-          src,
-          type: 'video/mp4',
-        }],
+        // sources 已在 HTML 中定义
         html5: {
           hls: {
             enableLowInitialPlaylist: true,
@@ -149,21 +146,20 @@ export default function VideoPlayer({
       )}
 
       {/* 视频播放器 */}
-      <div data-vjs-player className="w-full">
-        <div ref={videoRef} className="video-js vjs-default-skin vjs-big-play-centered">
+      <div ref={videoRef} className="w-full">
         <video
-          className="video-js vjs-big-play-centered"
+          className="video-js vjs-default-skin vjs-big-play-centered"
           preload="auto"
           poster={poster}
           controls
           playsInline
+          data-setup='{}'
         >
           <source src={src} type="video/mp4" />
           <p className="vjs-no-js">
             要观看此视频，请启用 JavaScript 并考虑升级到支持 HTML5 视频的 Web 浏览器
           </p>
         </video>
-      </div>
       </div>
 
       {/* 知识点标记（在进度条上方） */}
