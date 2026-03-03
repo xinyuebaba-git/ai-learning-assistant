@@ -58,7 +58,7 @@ export default function RegisterPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-6 text-gray-900">
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700">
                 邮箱
