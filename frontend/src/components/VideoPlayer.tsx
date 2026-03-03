@@ -150,7 +150,20 @@ export default function VideoPlayer({
 
       {/* 视频播放器 */}
       <div data-vjs-player className="w-full">
-        <div ref={videoRef} className="video-js vjs-default-skin vjs-big-play-centered" />
+        <div ref={videoRef} className="video-js vjs-default-skin vjs-big-play-centered">
+        <video
+          className="video-js vjs-big-play-centered"
+          preload="auto"
+          poster={poster}
+          controls
+          playsInline
+        >
+          <source src={src} type="video/mp4" />
+          <p className="vjs-no-js">
+            要观看此视频，请启用 JavaScript 并考虑升级到支持 HTML5 视频的 Web 浏览器
+          </p>
+        </video>
+      </div>
       </div>
 
       {/* 知识点标记（在进度条上方） */}
