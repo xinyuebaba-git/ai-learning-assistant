@@ -96,36 +96,44 @@ class LLMService:
         """
         client = self._get_client()
         
-        # 构建提示词
-        system_prompt = """你是一个专业的课程内容分析助手。你的任务是：
-1. 总结视频的核心内容（300-500 字）
-2. 提取关键知识点，包括知识点名称、描述、对应的时间点
-3. 知识点类型包括：concept(概念), formula(公式), example(示例), key_point(重点)
+        # 构建提示词（强化版 - 使用英文提示词提高遵循度）
+        system_prompt = """You are a professional educational content analyst. Analyze the video content and output JSON in the EXACT format below.
 
-请以 JSON 格式返回，结构如下：
+## REQUIRED JSON FORMAT (must follow exactly)
 {
-    "summary": "完整的课程总结...",
-    "knowledge_points": [
-        {
-            "timestamp": 120.5,
-            "title": "知识点名称",
-            "description": "详细描述",
-            "type": "concept"
-        }
-    ]
+  "summary": "A 300-500 word summary of the video content in Chinese",
+  "knowledge_points": [
+    {
+      "timestamp": 120.5,
+      "title": "Knowledge point title in Chinese",
+      "description": "Detailed description in Chinese",
+      "type": "concept"
+    }
+  ]
 }
 
-注意：
-- 知识点的时间点需要根据字幕内容推断
-- 只返回 JSON，不要有其他内容
-- 知识点数量控制在 10-20 个之间"""
+## Knowledge Point Types
+- concept: 概念定义 (concept definition)
+- formula: 公式定理 (formula/theorem)
+- example: 示例案例 (example case)
+- key_point: 重点难点 (key difficulty)
 
-        user_prompt = f"""视频标题：{video_title}
+## CRITICAL REQUIREMENTS
+⚠️ Output ONLY valid JSON - no markdown, no explanations
+⚠️ Use English field names: "summary" and "knowledge_points"
+⚠️ timestamp is in seconds (float)
+⚠️ Include 10-20 knowledge points
+⚠️ Content (summary, title, description) should be in Chinese
+⚠️ Field names must be in English"""
 
-字幕内容：
-{subtitle_text[:15000]}  # 限制长度避免超出上下文
+        user_prompt = f"""Analyze this video and generate a JSON summary:
 
-请分析并总结这个视频的内容。"""
+Video Title: {video_title}
+
+Subtitle Content:
+{subtitle_text[:15000]}
+
+Output ONLY the JSON object, nothing else."""
 
         logger.info(f"开始生成总结，模型：{self.model}, backend: {self.backend}")
         
@@ -156,28 +164,71 @@ class LLMService:
             result_text = response.choices[0].message.content
             token_count = response.usage.total_tokens
         
-        # 解析 JSON
-        try:
-            result = json.loads(result_text)
-            logger.info(f"✅ 总结生成完成，知识点数量：{len(result.get('knowledge_points', []))}")
-            
-            return {
-                "summary": result.get("summary", ""),
-                "knowledge_points": result.get("knowledge_points", []),
-                "token_count": token_count,
-            }
-        except json.JSONDecodeError as e:
-            logger.error(f"JSON 解析失败：{e}")
-            # 尝试提取 JSON
-            import re
-            json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
-            if json_match:
-                result = json.loads(json_match.group())
+        # 解析 JSON（带重试和回退）
+        max_retries = 2
+        for attempt in range(max_retries):
+            try:
+                result = json.loads(result_text)
+                
+                # 验证必要字段
+                if "summary" not in result or "knowledge_points" not in result:
+                    raise ValueError("JSON 缺少必要字段：summary 或 knowledge_points")
+                
+                logger.info(f"✅ 总结生成完成（尝试 {attempt+1}/{max_retries}），知识点数量：{len(result.get('knowledge_points', []))}")
+                
                 return {
                     "summary": result.get("summary", ""),
                     "knowledge_points": result.get("knowledge_points", []),
                     "token_count": token_count,
                 }
+                
+            except (json.JSONDecodeError, ValueError) as e:
+                logger.warning(f"JSON 解析失败（尝试 {attempt+1}/{max_retries}）: {e}")
+                
+                if attempt < max_retries - 1:
+                    # 尝试提取 JSON
+                    import re
+                    json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
+                    if json_match:
+                        try:
+                            result = json.loads(json_match.group())
+                            logger.info(f"✅ 从文本中提取 JSON 成功")
+                            return {
+                                "summary": result.get("summary", ""),
+                                "knowledge_points": result.get("knowledge_points", []),
+                                "token_count": token_count,
+                            }
+                        except:
+                            pass
+                    
+                    # 重试：使用更简单的提示词
+                    logger.info(f"重试生成总结（简化版提示词）...")
+                    simple_prompt = f"请用 JSON 格式总结以下视频内容，包含 summary 和 knowledge_points 两个字段：{video_title}"
+                    
+                    if self.backend == "local":
+                        response = await asyncio.to_thread(
+                            client.chat,
+                            model=self.model,
+                            messages=[{"role": "user", "content": simple_prompt}],
+                            format="json",
+                        )
+                        result_text = response["message"]["content"]
+                    else:
+                        response = await asyncio.to_thread(
+                            client.chat.completions.create,
+                            model=self.model,
+                            messages=[{"role": "user", "content": simple_prompt}],
+                            response_format={"type": "json_object"},
+                        )
+                        result_text = response.choices[0].message.content
+                else:
+                    # 最后一次失败，返回空结果
+                    logger.error(f"❌ JSON 解析最终失败，返回空总结")
+                    return {
+                        "summary": "",
+                        "knowledge_points": [],
+                        "token_count": token_count,
+                    }
             raise
     
     async def answer_question(
