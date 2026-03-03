@@ -89,7 +89,7 @@ export default function VideoPlayerPage() {
       {/* 视频播放器 */}
       <div className="bg-black rounded-lg overflow-hidden shadow-lg">
         <VideoPlayer
-          src={video.filepath}
+          src={`http://localhost:8000/api/videos/${video.id}/stream`}
           poster=""
           subtitles={subtitleData?.subtitles || []}
           knowledgePoints={summaryData?.knowledge_points || []}

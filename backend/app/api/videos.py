@@ -1,10 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from typing import List, Optional
 from pathlib import Path
 import os
+import re
+import aiofiles
 
 from ..db.base import get_db
 from ..models.video import Video, VideoStatus
@@ -90,6 +93,37 @@ async def list_videos(
     return videos
 
 
+# ============ 视频流 API ============
+
+from fastapi.responses import FileResponse, StreamingResponse
+
+@router.get("/{video_id}/stream")
+async def stream_video(
+    video_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_dependency)
+):
+    """视频流式传输 - 支持 Range 请求"""
+    # 获取视频信息
+    result = await db.execute(select(Video).where(Video.id == video_id))
+    video = result.scalar_one_or_none()
+    
+    if not video:
+        raise HTTPException(status_code=404, detail="视频不存在")
+    
+    # 检查文件是否存在
+    video_path = Path(video.filepath)
+    if not video_path.exists():
+        raise HTTPException(status_code=404, detail="视频文件不存在")
+    
+    # 使用 FileResponse 自动处理 Range 请求
+    return FileResponse(
+        str(video_path),
+        media_type='video/mp4',
+        filename=video.filename,
+    )
+
+
 @router.get("/{video_id}", response_model=VideoDetailResponse)
 async def get_video(
     video_id: int,
@@ -159,6 +193,8 @@ async def scan_videos(
         "scanned_count": scanned_count,
         "new_count": new_count,
     }
+
+
 
 
 @router.post("/{video_id}/favorite")
@@ -302,3 +338,5 @@ async def process_video(
 
 
 from fastapi import BackgroundTasks
+
+
