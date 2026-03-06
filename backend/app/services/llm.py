@@ -96,6 +96,27 @@ class LLMService:
         """
         client = self._get_client()
         
+        # 智能截断字幕：根据长度选择策略
+        max_chars = 100000  # 最大字符数（支持约 2-3 小时视频）
+        if len(subtitle_text) > max_chars:
+            # 长视频：采用分段采样策略，保留开头、中间、结尾的关键内容
+            logger.info(f"字幕较长 ({len(subtitle_text)} 字符)，采用分段采样策略...")
+            
+            segment_size = max_chars // 3
+            third_point = len(subtitle_text) // 3
+            two_third_point = 2 * len(subtitle_text) // 3
+            
+            # 取开头、中间、结尾三段
+            part1 = subtitle_text[:segment_size]
+            part2 = subtitle_text[third_point:third_point + segment_size]
+            part3 = subtitle_text[two_third_point:two_third_point + segment_size]
+            
+            sampled_text = f"[视频开头]\n{part1}\n\n[视频中间]\n{part2}\n\n[视频结尾]\n{part3}"
+            logger.info(f"采样后字幕长度：{len(sampled_text)} 字符")
+        else:
+            sampled_text = subtitle_text
+            logger.info(f"字幕长度适中 ({len(subtitle_text)} 字符)，使用完整内容")
+        
         # 构建提示词（强化版 - 使用英文提示词提高遵循度）
         system_prompt = """You are a professional educational content analyst. Analyze the video content and output JSON in the EXACT format below.
 
@@ -131,7 +152,7 @@ class LLMService:
 Video Title: {video_title}
 
 Subtitle Content:
-{subtitle_text[:15000]}
+{sampled_text}
 
 Output ONLY the JSON object, nothing else."""
 

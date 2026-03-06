@@ -59,6 +59,10 @@ class ASRService:
             except ImportError:
                 logger.error("未安装 whisper，请运行：pip install openai-whisper")
                 raise
+        elif self.engine == "deepgram":
+            # Deepgram 使用 HTTP API，不需要加载本地模型
+            logger.info(f"✅ Deepgram 已配置（模型：{self.model}，使用 HTTP API）")
+            self._model_instance = {}  # 空字典，表示已配置
         else:
             raise ValueError(f"不支持的 ASR 引擎：{self.engine}")
     
@@ -77,14 +81,15 @@ class ASRService:
         Returns:
             字幕条目列表
         """
-        if self._model_instance is None:
+        # Deepgram 不需要加载模型
+        if self.engine != "deepgram" and self._model_instance is None:
             self.load_model()
         
         video_path = Path(video_path)
         if not video_path.exists():
             raise FileNotFoundError(f"视频文件不存在：{video_path}")
         
-        logger.info(f"开始转录：{video_path.name}")
+        logger.info(f"开始转录：{video_path.name} (engine={self.engine})")
         
         return await asyncio.to_thread(
             self._transcribe_sync,
@@ -98,6 +103,105 @@ class ASRService:
         progress_callback: Optional[Callable[[float], None]] = None,
     ) -> List[SubtitleEntry]:
         """同步转录实现"""
+        if self.engine == "deepgram":
+            return self._transcribe_deepgram(video_path, progress_callback)
+        elif self.engine == "faster-whisper":
+            return self._transcribe_faster_whisper(video_path, progress_callback)
+        elif self.engine == "whisper":
+            return self._transcribe_whisper(video_path, progress_callback)
+        else:
+            raise ValueError(f"不支持的 ASR 引擎：{self.engine}")
+    
+    def _transcribe_deepgram(
+        self,
+        video_path: str,
+        progress_callback: Optional[Callable[[float], None]] = None,
+    ) -> List[SubtitleEntry]:
+        """使用 Deepgram 转录（参考 subgen 项目的成功方式）"""
+        import urllib.request as urlrequest
+        import urllib.error as urlerror
+        import urllib.parse as urlparse
+        import json
+        from pathlib import Path
+        from ..core.config import settings
+        
+        logger.info(f"使用 Deepgram ({self.model}) 转录：{video_path}")
+        
+        # 获取 API Key
+        api_key = settings.DEEPGRAM_API_KEY
+        if not api_key:
+            raise RuntimeError("Deepgram API Key 未配置")
+        
+        # 读取音频文件
+        video_path = Path(video_path)
+        with open(video_path, "rb") as f:
+            audio_bytes = f.read()
+        
+        # 构建请求参数
+        params = {
+            "model": self.model or "nova-3",
+            "smart_format": "true",
+            "punctuate": "true",
+            "utterances": "true",
+            "diarize": "false",
+            "detect_language": "true",
+        }
+        
+        url = "https://api.deepgram.com/v1/listen?" + urlparse.urlencode(params)
+        
+        req = urlrequest.Request(
+            url,
+            data=audio_bytes,
+            headers={
+                "Authorization": f"Token {api_key.strip()}",
+                "Content-Type": "application/octet-stream",
+                "Accept": "application/json",
+            },
+            method="POST",
+        )
+        
+        # 发送请求
+        logger.info("🚀 发送请求到 Deepgram API...")
+        try:
+            with urlrequest.urlopen(req, timeout=600) as resp:
+                payload = json.loads(resp.read().decode("utf-8", errors="ignore"))
+            
+            logger.info(f"✅ Deepgram API 请求成功 (HTTP {resp.status})")
+            
+            # 解析结果
+            channels = payload.get("results", {}).get("channels", [])
+            if not channels or not isinstance(channels[0], dict):
+                raise ValueError("Deepgram 响应格式错误：无 channels")
+            
+            alts = channels[0].get("alternatives", [])
+            if not alts or not isinstance(alts[0], dict):
+                raise ValueError("Deepgram 响应格式错误：无 alternatives")
+            
+            alt = alts[0]
+            words = alt.get("words", [])
+            
+            # 转换为 SubtitleEntry
+            subtitles = []
+            for i, w in enumerate(words if isinstance(words, list) else []):
+                subtitles.append(SubtitleEntry(
+                    index=i,
+                    start=float(w.get("start", 0)),
+                    end=float(w.get("end", 0)),
+                    text=w.get("text", "").strip(),
+                ))
+            
+            logger.info(f"✅ Deepgram 转录完成：{len(subtitles)} 条字幕")
+            return subtitles
+            
+        except urlerror.HTTPError as exc:
+            body = ""
+            try:
+                body = exc.read().decode("utf-8", errors="ignore")
+            except Exception:
+                body = ""
+            raise RuntimeError(f"Deepgram 请求失败：HTTP {exc.code} {body[:240]}") from exc
+        except Exception as exc:
+            raise RuntimeError(f"Deepgram 请求失败：{exc}") from exc
         entries = []
         
         if self.engine == "faster-whisper":

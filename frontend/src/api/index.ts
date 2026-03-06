@@ -60,10 +60,14 @@ export const videoApi = {
 }
 
 export const searchApi = {
-  search: (q: string, limit?: number, search_type?: string) =>
-    api.get('/search', { params: { q, limit, search_type } }),
-  suggestions: (q: string, limit?: number) =>
-    api.get('/search/suggestions', { params: { q, limit } }),
+  search: async (q: string, limit?: number, search_type?: string) => {
+    const result = await api.get('/search', { params: { q, limit, search_type } })
+    return result.data
+  },
+  suggestions: async (q: string, limit?: number) => {
+    const result = await api.get('/search/suggestions', { params: { q, limit } })
+    return result.data
+  },
 }
 
 export const noteApi = {

@@ -1,6 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
-import videojs from 'video.js'
-import 'video.js/dist/video-js.css'
+import { useState, useRef, useEffect } from 'react'
 
 interface Subtitle {
   index: number
@@ -33,102 +31,67 @@ export default function VideoPlayer({
   jumpToTime,
   onTimeJump,
 }: VideoPlayerProps) {
-  console.log('🎥 [VideoPlayer] 组件渲染，src:', src)
-  alert('🎥 VideoPlayer 渲染，src=' + src)
-  console.log('🎥 [VideoPlayer] 参数:', { src, poster, subtitles: subtitles?.length, knowledgePoints: knowledgePoints?.length })
   const videoRef = useRef<HTMLVideoElement>(null)
-  const playerRef = useRef<any>(null)
   const [currentSubtitle, setCurrentSubtitle] = useState<string>('')
   const [showSubtitles, setShowSubtitles] = useState(true)
   const [videoDuration, setVideoDuration] = useState<number>(0)
   const [error, setError] = useState<string>('')
 
-  // 初始化 Video.js
-  console.log('⚙️ [VideoPlayer] 开始初始化 Video.js')
-  console.log('⚙️ [VideoPlayer] videoRef:', videoRef.current ? '存在' : '不存在')
+  // 监听视频事件
   useEffect(() => {
-    if (!videoRef.current) return
+    const video = videoRef.current
+    if (!video) return
 
-    // 清理旧实例
-    if (playerRef.current) {
-      playerRef.current.dispose()
-      playerRef.current = null
+    // 监听错误
+    const handleError = () => {
+      if (video.error) {
+        const errorMessages: Record<number, string> = {
+          1: 'MEDIA_ERR_ABORTED',
+          2: 'MEDIA_ERR_NETWORK',
+          3: 'MEDIA_ERR_DECODE',
+          4: 'MEDIA_ERR_SRC_NOT_SUPPORTED',
+        }
+        setError(`视频加载失败：${errorMessages[video.error.code] || video.error.message}`)
+      }
     }
 
-    try {
-      // 初始化 Video.js
-      playerRef.current = videojs(videoRef.current!, {
-        autoplay: false,
-        controls: true,
-        responsive: true,
-        fluid: true,
-        poster,
-        preload: 'auto',
-        sources: [{
-          src,
-          type: 'video/mp4',
-        }],
-        html5: {
-          hls: {
-            enableLowInitialPlaylist: true,
-            smoothQualityChange: true,
-          },
-        },
-      })
-
-      // 监听错误
-      const handleError = () => {
-        console.error('❌ [VideoPlayer] 视频播放错误')
-        const error = playerRef.current.error()
-        if (error) {
-          setError(`视频加载失败：${error.message}`)
-          console.error('Video.js error:', error)
-        }
-      }
-
-      // 监听视频加载完成
-      const handleLoadedMetadata = () => {
-        const duration = playerRef.current.duration()
+    // 监听视频加载完成
+    const handleLoadedMetadata = () => {
+      const duration = video.duration
+      if (duration && isFinite(duration) && duration > 0) {
         setVideoDuration(duration)
         setError('')
-        console.log('Video loaded, duration:', duration)
       }
-
-      // 监听时间更新，显示对应字幕
-      const handleTimeUpdate = () => {
-        const currentTime = playerRef.current.currentTime()
-        const subtitle = subtitles.find(
-          (s) => currentTime >= s.start && currentTime <= s.end
-        )
-        setCurrentSubtitle(subtitle?.text || '')
-      }
-
-      playerRef.current.on('error', handleError)
-      playerRef.current.on('loadedmetadata', handleLoadedMetadata)
-      playerRef.current.on('timeupdate', handleTimeUpdate)
-
-      return () => {
-        if (playerRef.current) {
-          playerRef.current.off('error', handleError)
-          playerRef.current.off('loadedmetadata', handleLoadedMetadata)
-          playerRef.current.off('timeupdate', handleTimeUpdate)
-          playerRef.current.dispose()
-          playerRef.current = null
-        }
-      }
-    } catch (err) {
-      console.error('Failed to initialize Video.js:', err)
-      setError('播放器初始化失败')
     }
-  }, [src, poster])
 
-  // 跳转时间
+    // 监听时间更新，显示对应字幕
+    const handleTimeUpdate = () => {
+      const subtitle = subtitles.find(
+        (s) => video.currentTime >= s.start && video.currentTime <= s.end
+      )
+      setCurrentSubtitle(subtitle?.text || '')
+    }
+
+    video.addEventListener('error', handleError)
+    video.addEventListener('loadedmetadata', handleLoadedMetadata)
+    video.addEventListener('timeupdate', handleTimeUpdate)
+
+    return () => {
+      video.removeEventListener('error', handleError)
+      video.removeEventListener('loadedmetadata', handleLoadedMetadata)
+      video.removeEventListener('timeupdate', handleTimeUpdate)
+    }
+  }, [src, subtitles])
+
+  // 跳转到指定时间
   useEffect(() => {
-    if (jumpToTime !== undefined && jumpToTime !== null && playerRef.current) {
-      playerRef.current.currentTime(jumpToTime)
-      playerRef.current.play().catch(err => {
-        console.error('Failed to play after seek:', err)
+    if (jumpToTime !== null && jumpToTime !== undefined && videoRef.current) {
+      console.log('📍 VideoPlayer 执行跳转:', jumpToTime)
+      videoRef.current.currentTime = jumpToTime
+      videoRef.current.play().catch(err => {
+        console.error('Play after seek failed:', err)
       })
+      // 通知父组件已完成跳转
       if (onTimeJump) {
         onTimeJump()
       }
@@ -137,11 +100,9 @@ export default function VideoPlayer({
 
   // 跳转到知识点
   const jumpToKnowledgePoint = (timestamp: number) => {
-    if (playerRef.current) {
-      playerRef.current.currentTime(timestamp)
-      playerRef.current.play().catch(err => {
-        console.error('Failed to play after seek:', err)
-      })
+    if (videoRef.current) {
+      videoRef.current.currentTime = timestamp
+      videoRef.current.play().catch(err => console.error('Play after seek failed:', err))
     }
   }
 
@@ -153,23 +114,19 @@ export default function VideoPlayer({
           ⚠️ {error}
         </div>
       )}
-
-      {/* 视频播放器 */}
-      <div ref={videoRef} className="w-full">
-        <video
-          className="video-js vjs-default-skin vjs-big-play-centered"
-          preload="auto"
-          poster={poster}
-          controls
-          playsInline
-          data-setup='{}'
-        >
-          <source src={src} type="video/mp4" />
-          <p className="vjs-no-js">
-            要观看此视频，请启用 JavaScript 并考虑升级到支持 HTML5 视频的 Web 浏览器
-          </p>
-        </video>
-      </div>
+      
+      {/* 原生 HTML5 视频播放器 */}
+      <video
+        ref={videoRef}
+        className="w-full rounded-lg bg-black"
+        controls
+        preload="metadata"
+        poster={poster}
+        playsInline
+      >
+        <source src={src} type="video/mp4" />
+        您的浏览器不支持 HTML5 视频
+      </video>
 
       {/* 知识点标记（在进度条上方） */}
       {knowledgePoints.length > 0 && videoDuration > 0 && (

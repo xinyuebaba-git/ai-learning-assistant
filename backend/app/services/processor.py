@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Optional
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 
 from ..models.video import Video, VideoStatus
 from ..models.subtitle import Subtitle
@@ -64,11 +64,24 @@ class VideoProcessingService:
             
             logger.info(f"✅ 视频处理完成：{video.filename}")
             
+            # 查询字幕数量（使用显式查询，避免访问 ORM 关系）
+            result = await self.db.execute(
+                select(func.count(Subtitle.id)).where(Subtitle.video_id == video.id)
+            )
+            subtitle_count = result.scalar() or 0
+            
+            # 查询知识点数量（从 summary 表获取）
+            result = await self.db.execute(
+                select(Summary).where(Summary.video_id == video.id)
+            )
+            summary = result.scalar_one_or_none()
+            knowledge_point_count = len(summary.knowledge_points) if summary and summary.knowledge_points else 0
+            
             return {
                 "success": True,
                 "video_id": video_id,
-                "subtitle_count": len(video.subtitles),
-                "knowledge_points": len(video.summary.knowledge_points) if video.summary else 0,
+                "subtitle_count": subtitle_count,
+                "knowledge_points": knowledge_point_count,
             }
             
         except Exception as e:

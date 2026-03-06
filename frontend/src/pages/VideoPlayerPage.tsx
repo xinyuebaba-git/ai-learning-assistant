@@ -1,13 +1,12 @@
-import { useState, useRef, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { videoApi, noteApi } from '../api'
 import VideoPlayer from '../components/VideoPlayer'
 
 export default function VideoPlayerPage() {
   const { id } = useParams<{ id: string }>()
-  console.log('🎬 [VideoPlayerPage] 页面加载，video id:', id)
-  alert('🎬 VideoPlayerPage 加载，id=' + id)
+  const location = useLocation()
   
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -15,19 +14,27 @@ export default function VideoPlayerPage() {
   const [newNote, setNewNote] = useState('')
   const [jumpToTime, setJumpToTime] = useState<number | null>(null)
 
+  // 处理 URL 参数中的时间戳（来自搜索结果）
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    const timestamp = params.get('t')
+    if (timestamp) {
+      const time = parseFloat(timestamp)
+      if (!isNaN(time)) {
+        console.log('📍 从 URL 参数读取时间戳:', time)
+        setJumpToTime(time)
+        // 清除 URL 参数
+        navigate(`/videos/${id}`, { replace: true })
+      }
+    }
+  }, [location.search, id, navigate])
+
   // 获取视频详情
-  const { data: video, isLoading: videoLoading, error: videoError } = useQuery({
+  const { data: video, isLoading: videoLoading } = useQuery({
     queryKey: ['video', id],
     queryFn: async () => {
-      console.log('📹 [VideoPlayerPage] 开始获取视频数据，id:', id)
-      try {
-        const result = await videoApi.get(Number(id))
-        console.log('✅ [VideoPlayerPage] 视频数据获取成功:', result.data?.filename)
-        return result.data
-      } catch (error) {
-        console.error('❌ [VideoPlayerPage] 视频数据获取失败:', error)
-        throw error
-      }
+      const result = await videoApi.get(Number(id))
+      return result.data
     },
     enabled: !!id,
   })
@@ -35,21 +42,30 @@ export default function VideoPlayerPage() {
   // 获取字幕
   const { data: subtitleData } = useQuery({
     queryKey: ['subtitle', id],
-    queryFn: () => videoApi.getSubtitle(Number(id)),
+    queryFn: async () => {
+      const result = await videoApi.getSubtitle(Number(id))
+      return result.data
+    },
     enabled: !!video?.has_subtitle,
   })
 
-  // 获取总结（总是尝试获取，由 API 决定是否返回 404）
-  const { data: summaryData, error: summaryError } = useQuery({
+  // 获取总结
+  const { data: summaryData } = useQuery({
     queryKey: ['summary', id],
     queryFn: async () => {
       const result = await videoApi.getSummary(Number(id))
+      console.log('📝 总结原始数据:', result.data)
+      console.log('📝 知识点类型:', typeof result.data?.knowledge_points)
+      
       // 解析知识点 JSON 字符串
       if (result.data && typeof result.data.knowledge_points === 'string') {
         try {
-          result.data.knowledge_points = JSON.parse(result.data.knowledge_points)
+          const parsed = JSON.parse(result.data.knowledge_points)
+          result.data.knowledge_points = parsed
+          console.log('✅ 知识点解析成功，数量:', parsed.length)
+          console.log('📍 前 3 个时间戳:', parsed.slice(0, 3).map((k: any) => k.timestamp))
         } catch (e) {
-          console.error('解析知识点失败:', e)
+          console.error('❌ 解析知识点失败:', e)
           result.data.knowledge_points = []
         }
       }
@@ -60,7 +76,10 @@ export default function VideoPlayerPage() {
   // 获取笔记
   const { data: notes } = useQuery({
     queryKey: ['notes', id],
-    queryFn: () => noteApi.list(Number(id)),
+    queryFn: async () => {
+      const result = await noteApi.list(Number(id))
+      return result.data
+    },
   })
 
   // 创建笔记
@@ -80,7 +99,17 @@ export default function VideoPlayerPage() {
 
   // 跳转到指定时间
   const handleJumpToTime = (time: number) => {
+    console.log('📍 handleJumpToTime 被调用')
+    console.log('📍 时间参数:', time, '类型:', typeof time)
+    console.log('📍 当前 jumpToTime 状态:', jumpToTime)
+    
     setJumpToTime(time)
+    
+    // 验证状态是否更新
+    setTimeout(() => {
+      console.log('📍 1 秒后 jumpToTime 状态:', jumpToTime)
+      setJumpToTime(null)
+    }, 1000)
   }
 
   if (videoLoading) {
@@ -159,7 +188,7 @@ export default function VideoPlayerPage() {
             {/* 视频信息 */}
             <div className="bg-white rounded-lg shadow-sm p-4 mt-4">
               <div className="flex items-center justify-between text-sm text-gray-600">
-                <span>时长：{Math.floor((video.duration || 0) / 60)}:{String(Math.floor((video.duration || 0) % 60)).padStart(2, '0')}</span>
+                <span>时长：{video.duration ? `${Math.floor(video.duration / 60)}:${String(Math.floor(video.duration % 60)).padStart(2, '0')}` : '未知'}</span>
                 <span>状态：
                   <span className={`ml-1 px-2 py-0.5 rounded text-xs ${
                     video.status === 'SUMMARIZED' ? 'bg-green-100 text-green-800' :
@@ -234,7 +263,7 @@ export default function VideoPlayerPage() {
                                   <div className="flex items-center justify-between mb-1">
                                     <span className="text-sm font-medium text-gray-900">{kp.title}</span>
                                     <span className="text-xs text-primary-600 bg-white px-2 py-0.5 rounded font-mono">
-                                      {Math.floor(kp.timestamp / 60)}:{String(Math.floor(kp.timestamp % 60)).padStart(2, '0')}
+                                      ⏱️ {Math.floor(kp.timestamp / 60)}:{String(Math.floor(kp.timestamp % 60)).padStart(2, '0')}
                                     </span>
                                   </div>
                                   {kp.description && (
@@ -265,15 +294,8 @@ export default function VideoPlayerPage() {
                       <div className="text-center py-8">
                         <div className="text-4xl mb-2">📝</div>
                         <p className="text-gray-500 text-sm">
-                          {video.has_summary ? '总结加载中...' : '暂无总结'}
+                          暂无总结
                         </p>
-                        {summaryError && (
-                          <p className="text-gray-400 text-xs mt-2">
-                            {(summaryError as any)?.response?.status === 404 
-                              ? '该视频尚未生成总结'
-                              : '加载失败，请稍后重试'}
-                          </p>
-                        )}
                       </div>
                     )}
                   </div>

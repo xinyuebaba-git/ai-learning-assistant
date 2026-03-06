@@ -31,12 +31,12 @@ def process_video_task(self, video_id: int):
         # 更新视频状态为处理中
         asyncio.run(_update_video_status(video_id, VideoStatus.SUBTITLING))
         
-        # 创建数据库会话
+        # 创建数据库会话并处理
         async def _process():
             async with async_session_maker() as session:
                 processor = VideoProcessingService(session)
+                # process_video 内部已经处理了 commit
                 result = await processor.process_video(video_id)
-                await session.commit()
                 return result
         
         # 执行处理

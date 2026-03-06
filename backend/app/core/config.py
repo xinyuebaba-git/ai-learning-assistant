@@ -49,21 +49,19 @@ class Settings(BaseSettings):
     OPENAI_MODEL: str = "gpt-4.1-mini"
     OPENAI_API_KEY: Optional[str] = None
     
-    # LLM 配置 - 阿里百炼 Coding Plan
+    # LLM 配置 - 阿里百炼 Coding Plan (qwen3.5-plus)
     # 参考文档：https://help.aliyun.com/zh/model-studio/coding-plan-quickstart
     ALIBABA_BASE_URL: str = "https://coding.dashscope.aliyuncs.com/v1"
-    ALIBABA_MODEL: str = "qwen3.5"
-    ALIBABA_API_KEY: Optional[str] = None
+    ALIBABA_MODEL: str = "qwen3.5-plus"
+    ALIBABA_API_KEY: str = "sk-sp-b2642e0a143d4a15b1ccf290607f5a3c"  # 阿里百炼 API Key
     
     # 默认 LLM 后端
-    DEFAULT_LLM_BACKEND: str = "local"  # local / deepseek / openai / alibaba
+    DEFAULT_LLM_BACKEND: str = "alibaba"  # local / deepseek / openai / alibaba
     
     # ASR 配置
-    ASR_ENGINE: str = "faster-whisper"  # whisper / faster-whisper / deepgram
-    ASR_MODEL: str = "medium"
-    
-    # Deepgram 配置
-    DEEPGRAM_API_KEY: Optional[str] = None
+    ASR_ENGINE: str = "deepgram"  # whisper / faster-whisper / deepgram
+    ASR_MODEL: str = "nova-3"
+    DEEPGRAM_API_KEY: str = "e1af15d95d0fb97db51629933147120c6f067482"  # Deepgram API Key
     DEEPGRAM_MODEL: str = "nova-3"
     
     # 字幕分段配置

@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
 import { searchApi } from '../api'
 
 export default function SearchPage() {
@@ -60,10 +59,20 @@ export default function SearchPage() {
           </div>
 
           <div className="space-y-4">
-            {searchResults.results.map((result: any, index: number) => (
-              <Link
+            {searchResults.results.map((result: any, index: number) => {
+              const handleClick = (e: React.MouseEvent) => {
+                if (result.timestamp) {
+                  e.preventDefault()
+                  // 跳转到视频页面并传递时间戳
+                  window.location.href = `/videos/${result.video_id}?t=${result.timestamp}`
+                }
+              }
+              
+              return (
+              <a
                 key={index}
-                to={`/videos/${result.video_id}`}
+                href={`/videos/${result.video_id}`}
+                onClick={handleClick}
                 className="block bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow border border-gray-200 p-4"
               >
                 <div className="flex items-start justify-between mb-2">
@@ -90,8 +99,9 @@ export default function SearchPage() {
                   </div>
                   <span className="text-primary-600">点击查看 →</span>
                 </div>
-              </Link>
-            ))}
+              </a>
+              )
+            })}
           </div>
         </div>
       )}

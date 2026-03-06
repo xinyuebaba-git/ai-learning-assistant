@@ -21,6 +21,16 @@ body {
   min-height: 100vh;
 }
 
+/* 修复输入框文字颜色 - 确保在浅色背景下显示深色文字 */
+input, textarea, select {
+  color: #1f2937 !important;  /* 深灰色文字 */
+  background-color: #ffffff !important;  /* 白色背景 */
+}
+
+input::placeholder, textarea::placeholder {
+  color: #9ca3af !important;  /* 浅灰色占位符 */
+}
+
 /* 自定义滚动条 */
 ::-webkit-scrollbar {
   width: 8px;

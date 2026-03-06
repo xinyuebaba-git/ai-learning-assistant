@@ -33,6 +33,8 @@ class NoteUpdate(BaseModel):
     tags: Optional[List[str]] = None
 
 
+from pydantic import field_validator
+
 class NoteResponse(BaseModel):
     """笔记响应"""
     id: int
@@ -46,6 +48,13 @@ class NoteResponse(BaseModel):
     
     class Config:
         from_attributes = True
+    
+    @field_validator('created_at', 'updated_at', mode='before')
+    @classmethod
+    def convert_datetime_to_str(cls, v):
+        if isinstance(v, datetime):
+            return v.isoformat()
+        return v
 
 
 # ============ API 路由 ============
