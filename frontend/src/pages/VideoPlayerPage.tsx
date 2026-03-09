@@ -97,6 +97,23 @@ export default function VideoPlayerPage() {
     mutationFn: () => videoApi.toggleFavorite(Number(id)),
   })
 
+  // 重新生成知识点
+  const regenerateKpMutation = useMutation({
+    mutationFn: () => videoApi.regenerateKp(Number(id)),
+    onSuccess: (response) => {
+      const data = response.data
+      console.log('✅ 知识点重新生成成功:', data)
+      // 刷新总结数据
+      queryClient.invalidateQueries({ queryKey: ['summary', id] })
+      // 显示成功提示
+      alert(`✅ 知识点重新生成成功！\n生成了 ${data.count} 个知识点`)
+    },
+    onError: (error: any) => {
+      console.error('❌ 知识点重新生成失败:', error)
+      alert(`❌ 知识点重新生成失败：${error.message || '未知错误'}`)
+    },
+  })
+
   // 跳转到指定时间
   const handleJumpToTime = (time: number) => {
     console.log('📍 handleJumpToTime 被调用')
@@ -243,7 +260,30 @@ export default function VideoPlayerPage() {
                       <>
                         {summaryData.content && (
                           <div>
-                            <h3 className="text-sm font-semibold text-gray-700 mb-2">📝 课程总结</h3>
+                            <div className="flex items-center justify-between mb-2">
+                              <h3 className="text-sm font-semibold text-gray-700">📝 课程总结</h3>
+                              <button
+                                onClick={() => {
+                                  if (confirm('确定要重新生成知识点吗？\n\n这将调用 AI 分析视频内容，可能需要 1-2 分钟。')) {
+                                    regenerateKpMutation.mutate()
+                                  }
+                                }}
+                                disabled={regenerateKpMutation.isPending}
+                                className="px-3 py-1 text-xs bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 flex items-center space-x-1"
+                              >
+                                {regenerateKpMutation.isPending ? (
+                                  <>
+                                    <span className="animate-spin">⏳</span>
+                                    <span>生成中...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span>🔄</span>
+                                    <span>重新生成知识点</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
                             <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed bg-gray-50 p-3 rounded-md">
                               {summaryData.content}
                             </div>

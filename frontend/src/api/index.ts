@@ -5,7 +5,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || '/api'
 // 创建 axios 实例
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000,
+  timeout: 120000, // 2 分钟，支持长时间操作（如知识点重新生成）
   headers: {
     'Content-Type': 'application/json',
   },
@@ -57,6 +57,7 @@ export const videoApi = {
   toggleFavorite: (id: number) => api.post(`/videos/${id}/favorite`),
   getSubtitle: (id: number) => api.get(`/videos/${id}/subtitle`),
   getSummary: (id: number) => api.get(`/videos/${id}/summary`),
+  regenerateKp: (id: number) => api.post(`/videos/${id}/regenerate-kp`),
 }
 
 export const searchApi = {

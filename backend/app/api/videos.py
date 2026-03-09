@@ -76,7 +76,6 @@ async def list_videos(
     status_filter: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
-    # current_user: User = Depends(get_current_user_dependency)
 ):
     """获取视频列表"""
     query = select(Video)
@@ -113,20 +112,16 @@ async def play_video(
     db: AsyncSession = Depends(get_db),
 ):
     """视频播放 - 不需要认证"""
-    # 获取视频信息
     result = await db.execute(select(Video).where(Video.id == video_id))
     video = result.scalar_one_or_none()
     
     if not video:
         raise HTTPException(status_code=404, detail="视频不存在")
     
-    # 检查文件是否存在
     video_path = Path(video.filepath)
     if not video_path.exists():
         raise HTTPException(status_code=404, detail="视频文件不存在")
     
-    # 使用 FileResponse 自动处理 Range 请求
-    # 设置正确的响应头 - 中文文件名需要 URL 编码
     filename_encoded = quote(video.filename)
     headers = {
         'Accept-Ranges': 'bytes',
@@ -148,24 +143,18 @@ async def stream_video(
     db: AsyncSession = Depends(get_db),
 ):
     """视频流式传输 - 支持 Range 请求（不需要认证）"""
-    from fastapi import Request
-    
-    # 获取视频信息
     result = await db.execute(select(Video).where(Video.id == video_id))
     video = result.scalar_one_or_none()
     
     if not video:
         raise HTTPException(status_code=404, detail="视频不存在")
     
-    # 检查文件是否存在
     video_path = Path(video.filepath)
     if not video_path.exists():
         raise HTTPException(status_code=404, detail="视频文件不存在")
     
-    # 获取文件大小
     file_size = video_path.stat().st_size
     
-    # 使用 FileResponse 自动处理 Range 请求
     return FileResponse(
         str(video_path),
         media_type='video/mp4',
@@ -181,7 +170,6 @@ async def stream_video(
 async def get_video(
     video_id: int,
     db: AsyncSession = Depends(get_db),
-    # current_user: User = Depends(get_current_user_dependency)
 ):
     """获取视频详情"""
     result = await db.execute(select(Video).where(Video.id == video_id))
@@ -197,33 +185,26 @@ async def get_video(
 async def scan_videos(
     request: ScanRequest = None,
     db: AsyncSession = Depends(get_db),
-    # current_user: User = Depends(get_current_user_dependency)
 ):
     """扫描视频文件，并检查格式兼容性"""
     from ..core.config import settings
     import subprocess
     import json
     
-    # 确定扫描目录
     scan_dir = Path(request.directory) if request and request.directory else Path(settings.VIDEO_DIR)
     
     if not scan_dir.exists():
         raise HTTPException(status_code=400, detail=f"目录不存在：{scan_dir}")
     
-    # 支持的视频格式
     video_extensions = {".mp4", ".mov", ".mkv", ".avi", ".m4v", ".webm", ".flv", ".wmv"}
-    
-    # 浏览器兼容的 MP4 容器格式
     COMPATIBLE_FORMATS = {"mov", "mp4", "m4a", "3gp", "3g2", "mj2"}
     
-    # 扫描文件
     scanned_count = 0
     new_count = 0
     transcoded_count = 0
     failed_count = 0
     
     def check_video_format(filepath: Path) -> tuple[bool, str | None]:
-        """检查视频格式是否浏览器兼容，返回 (是否兼容，容器格式)"""
         try:
             result = subprocess.run(
                 ["ffprobe", "-v", "error", "-show_entries", "format=format_name", "-of", "json", str(filepath)],
@@ -234,8 +215,6 @@ async def scan_videos(
             
             data = json.loads(result.stdout)
             format_name = data.get("format", {}).get("format_name", "")
-            
-            # 检查是否为兼容的格式
             is_compatible = any(f in format_name for f in COMPATIBLE_FORMATS)
             return is_compatible, format_name
         except Exception as e:
@@ -243,17 +222,14 @@ async def scan_videos(
             return False, None
     
     def transcode_video(filepath: Path) -> bool:
-        """转码视频为标准 MP4 格式"""
         backup_path = filepath.with_suffix(filepath.suffix + ".backup")
         temp_path = filepath.with_suffix(filepath.suffix + ".transcoding.mp4")
         
         try:
-            # 备份原文件
             import shutil
             shutil.copy2(filepath, backup_path)
             print(f"已备份原文件：{backup_path}")
             
-            # 转码命令
             cmd = [
                 "ffmpeg", "-y",
                 "-i", str(filepath),
@@ -269,12 +245,10 @@ async def scan_videos(
             if result.returncode != 0:
                 print(f"转码失败：{filepath.name}")
                 print(result.stderr)
-                # 恢复备份
                 if backup_path.exists():
                     shutil.move(backup_path, filepath)
                 return False
             
-            # 验证转码后的文件
             is_ok, fmt = check_video_format(temp_path)
             if not is_ok:
                 print(f"转码后验证失败：{filepath.name}, format={fmt}")
@@ -282,9 +256,7 @@ async def scan_videos(
                     shutil.move(backup_path, filepath)
                 return False
             
-            # 替换原文件
             shutil.move(temp_path, filepath)
-            # 删除备份
             if backup_path.exists():
                 backup_path.unlink()
             
@@ -310,7 +282,6 @@ async def scan_videos(
         for filepath in scan_dir.rglob(f"*{ext}"):
             scanned_count += 1
             
-            # 检查是否已存在（使用文件名 + 文件大小 + 路径三重验证）
             file_size = filepath.stat().st_size
             result = await db.execute(
                 select(Video).where(
@@ -320,56 +291,49 @@ async def scan_videos(
             )
             existing = result.scalars().first()
             
-            # 如果找到同名同大小的文件，进一步检查路径
             if existing:
-                # 路径完全相同，确定是同一个文件
                 if existing.filepath == str(filepath):
                     print(f"⏭️  跳过已存在：{filepath.name}")
                     continue
-                # 路径不同但文件名和大小相同，可能是同一个文件的不同路径
                 else:
                     print(f"⏭️  跳过相似文件：{filepath.name} (已存在于：{existing.filepath})")
                     continue
             
-            # 确认为新文件
-                # 检查视频格式兼容性
-                is_compatible, format_name = check_video_format(filepath)
+            is_compatible, format_name = check_video_format(filepath)
+            
+            if not is_compatible:
+                print(f"⚠️ 发现不兼容格式：{filepath.name}, format={format_name}")
+                print(f"🔄 开始转码...")
                 
-                if not is_compatible:
-                    print(f"⚠️ 发现不兼容格式：{filepath.name}, format={format_name}")
-                    print(f"🔄 开始转码...")
-                    
-                    if transcode_video(filepath):
-                        print(f"✅ 转码成功：{filepath.name}")
-                        transcoded_count += 1
-                    else:
-                        print(f"❌ 转码失败：{filepath.name}，需要人工介入")
-                        failed_count += 1
-                        # 即使转码失败也记录，但标记状态
-                        video = Video(
-                            filename=filepath.name,
-                            filepath=str(filepath),
-                            title=filepath.stem,
-                            file_size=filepath.stat().st_size,
-                            status="transcode_failed",  # 特殊状态标记
-                            has_subtitle=False,
-                            has_summary=False,
-                        )
-                        db.add(video)
-                        continue
-                
-                # 创建新视频记录
-                video = Video(
-                    filename=filepath.name,
-                    filepath=str(filepath),
-                    title=filepath.stem,
-                    file_size=filepath.stat().st_size,
-                    status=VideoStatus.SCANNED,
-                    has_subtitle=False,
-                    has_summary=False,
-                )
-                db.add(video)
-                new_count += 1
+                if transcode_video(filepath):
+                    print(f"✅ 转码成功：{filepath.name}")
+                    transcoded_count += 1
+                else:
+                    print(f"❌ 转码失败：{filepath.name}，需要人工介入")
+                    failed_count += 1
+                    video = Video(
+                        filename=filepath.name,
+                        filepath=str(filepath),
+                        title=filepath.stem,
+                        file_size=filepath.stat().st_size,
+                        status="transcode_failed",
+                        has_subtitle=False,
+                        has_summary=False,
+                    )
+                    db.add(video)
+                    continue
+            
+            video = Video(
+                filename=filepath.name,
+                filepath=str(filepath),
+                title=filepath.stem,
+                file_size=filepath.stat().st_size,
+                status=VideoStatus.SCANNED,
+                has_subtitle=False,
+                has_summary=False,
+            )
+            db.add(video)
+            new_count += 1
     
     await db.commit()
     
@@ -383,162 +347,226 @@ async def scan_videos(
     }
 
 
-
-
 @router.post("/{video_id}/regenerate-kp")
 async def regenerate_knowledge_points(
     video_id: int,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
-    """两阶段重新生成知识点"""
-    from sqlalchemy import text, select
+    """异步重新生成知识点 - 立即返回任务状态"""
+    from sqlalchemy import select
     from ..models.video import Video
-    from ..services.llm import LLMService
     
-    # 获取视频信息
     result = await db.execute(select(Video).where(Video.id == video_id))
     video = result.scalar_one_or_none()
     
     if not video:
         raise HTTPException(status_code=404, detail="视频不存在")
     
-    # 加载字幕
     from ..models.subtitle import Subtitle
     result = await db.execute(
         select(Subtitle)
         .where(Subtitle.video_id == video_id)
         .order_by(Subtitle.start)
-        .limit(500)
     )
     subtitles = result.scalars().all()
     
     if not subtitles:
         raise HTTPException(status_code=400, detail="视频没有字幕")
     
-    # 构建字幕文本
-    subtitle_text = "\n".join([f"[{s.start:.1f}] {s.text}" for s in subtitles])
-    
-    llm = LLMService(backend="alibaba")  # 使用阿里百炼
-    
-    # 阶段 1：生成知识点
-    stage1_prompt = f"""视频：{video.title}
-
-字幕内容:
-{subtitle_text[:12000]}
-
-请深入理解内容，总结出 8-12 个关键知识点。
-每个知识点包含：title（标题）、description（描述）、type（类型）、keywords（2-3 个关键词）
-
-输出 JSON 格式：
-{{
-  "knowledge_points": [
-    {{"title": "...", "description": "...", "type": "concept", "keywords": ["...", "..."]}}
-  ]
-}}"""
-
-    print(f"🤖 阶段 1：生成知识点...")
-    result1 = await llm.summarize(subtitle_text[:12000], video.title)
-    knowledge_points = result1.get('knowledge_points', [])
-    
-    if not knowledge_points:
-        raise HTTPException(status_code=500, detail="知识点生成失败")
-    
-    print(f"✅ 生成了 {len(knowledge_points)} 个知识点")
-    
-    # 阶段 2：匹配时间戳
-    stage2_prompt = f"""字幕内容:
-{subtitle_text[:8000]}
-
-知识点列表:
-{json.dumps(knowledge_points, ensure_ascii=False)[:3000]}
-
-请为每个知识点匹配最相关的时间戳（秒）。
-基于语义匹配，不是严格字符对应。
-
-输出 JSON 格式：
-{{
-  "timestamped_knowledge_points": [
-    {{"title": "...", "description": "...", "type": "concept", "timestamp": 120.5, "confidence": "high"}}
-  ]
-}}"""
-
-    print(f"🤖 阶段 2：匹配时间戳...")
-    result2 = await llm.summarize(subtitle_text[:8000], "")
-    timestamped_kp = result2.get('timestamped_knowledge_points', knowledge_points)
-    
-    # 保存到数据库
-    from ..models.summary import Summary
-    result = await db.execute(
-        select(Summary).where(Summary.video_id == video_id)
-    )
-    summary = result.scalar_one_or_none()
-    
-    if summary:
-        summary.knowledge_points = timestamped_kp
-        summary.updated_at = datetime.utcnow()
-    else:
-        summary = Summary(
-            video_id=video_id,
-            content="",
-            knowledge_points=timestamped_kp
-        )
-        db.add(summary)
-    
-    await db.commit()
+    # 启动后台任务
+    background_tasks.add_task(_do_regenerate_kp, video_id, video.title, subtitles)
     
     return {
-        "message": "知识点重新生成完成",
-        "count": len(timestamped_kp),
-        "knowledge_points": timestamped_kp[:5]  # 返回前 5 个预览
+        "message": "知识点重新生成任务已启动，请稍候刷新页面查看结果",
+        "video_id": video_id,
+        "status": "processing",
     }
+
+
+async def _do_regenerate_kp(
+    video_id: int,
+    video_title: str,
+    subtitles: list,
+):
+    """后台执行知识点重新生成"""
+    from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from ..db.base import AsyncSessionLocal
+    from ..services.llm import LLMService
+    import asyncio
+    import re
+    import json
+    
+    db: AsyncSession = AsyncSessionLocal()
+    
+    try:
+        video_duration = max(s.end for s in subtitles) if subtitles else None
+        duration_minutes = int(video_duration // 60) if video_duration else 0
+        duration_info = f"{int(video_duration)}秒（{duration_minutes}分钟）" if video_duration else "未知"
+        
+        print(f"📊 视频时长：{duration_info}")
+        
+        subtitle_text = "\n".join([f"[{s.start:.1f}s] {s.text}" for s in subtitles])
+        
+        llm = LLMService(backend="alibaba")
+        client = llm._get_client()
+        
+        print(f"🤖 阶段 1：生成知识点...")
+        
+        kp_prompt = f"""视频标题：{video_title}
+视频时长：{duration_info}
+
+字幕内容（带时间戳）:
+{subtitle_text[:50000]}
+
+请分析视频内容，提取 15-20 个关键知识点，均匀分布在整个视频中。
+
+输出 JSON 格式（只输出 JSON，不要其他内容）:
+{{
+  "knowledge_points": [
+    {{"title": "知识点标题", "description": "知识点描述", "type": "concept"}}
+  ]
+}}
+
+知识点类型包括：concept（概念）, formula（公式）, example（示例）, key_point（重点）"""
+
+        response = await asyncio.to_thread(
+            client.chat.completions.create,
+            model=llm.model,
+            messages=[
+                {"role": "system", "content": "你是一个专业的教育内容分析师，输出纯 JSON 格式"},
+                {"role": "user", "content": kp_prompt},
+            ],
+            response_format={"type": "json_object"},
+        )
+        
+        result_text = response.choices[0].message.content
+        
+        json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
+        if json_match:
+            result = json.loads(json_match.group())
+            knowledge_points = result.get('knowledge_points', [])
+        else:
+            knowledge_points = []
+        
+        if not knowledge_points:
+            print(f"❌ 知识点生成失败")
+            return
+        
+        print(f"✅ 生成了 {len(knowledge_points)} 个知识点")
+        
+        print(f"🤖 阶段 2：为每个知识点匹配时间戳...")
+        
+        timestamped_kp = []
+        for kp in knowledge_points:
+            title = kp.get('title', '')
+            description = kp.get('description', '')
+            
+            matched_subtitle = None
+            max_overlap = 0
+            
+            for sub in subtitles:
+                text_lower = sub.text.lower()
+                title_lower = title.lower()
+                desc_lower = description.lower()
+                
+                overlap = 0
+                for word in title_lower.split():
+                    if word in text_lower:
+                        overlap += 1
+                for word in desc_lower.split()[:10]:
+                    if word in text_lower:
+                        overlap += 1
+                
+                if overlap > max_overlap:
+                    max_overlap = overlap
+                    matched_subtitle = sub
+            
+            if matched_subtitle and max_overlap > 0:
+                timestamp = matched_subtitle.start
+                confidence = "high"
+            else:
+                if video_duration:
+                    idx = knowledge_points.index(kp)
+                    total = len(knowledge_points)
+                    timestamp = (idx / (total - 1)) * video_duration if total > 1 else 0
+                else:
+                    timestamp = 0
+                confidence = "estimated"
+            
+            timestamped_kp.append({
+                **kp,
+                "timestamp": timestamp,
+                "confidence": confidence,
+                "matched_text": matched_subtitle.text if matched_subtitle else "",
+            })
+            
+            print(f"  - [{timestamp:.1f}s] {kp.get('title', '未知')}")
+        
+        print(f"✅ 匹配完成，{len([kp for kp in timestamped_kp if kp['confidence'] == 'high'])} 个高置信度匹配")
+        
+        from ..models.summary import Summary
+        result = await db.execute(
+            select(Summary).where(Summary.video_id == video_id)
+        )
+        summary = result.scalar_one_or_none()
+        
+        if summary:
+            summary.knowledge_points = timestamped_kp
+            summary.updated_at = datetime.utcnow()
+        else:
+            summary = Summary(
+                video_id=video_id,
+                content="",
+                knowledge_points=timestamped_kp
+            )
+            db.add(summary)
+        
+        await db.commit()
+        print(f"✅ 知识点重新生成完成，已保存")
+        
+    except Exception as e:
+        print(f"❌ 知识点重新生成失败：{e}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        await db.close()
 
 
 @router.post("/{video_id}/favorite")
 async def toggle_favorite(
     video_id: int,
     db: AsyncSession = Depends(get_db),
-    # current_user: User = Depends(get_current_user_dependency)
 ):
     """切换收藏状态"""
-    # 检查视频是否存在
     result = await db.execute(select(Video).where(Video.id == video_id))
     video = result.scalar_one_or_none()
     
     if not video:
         raise HTTPException(status_code=404, detail="视频不存在")
     
-    # 检查是否已收藏
-    result = await db.execute(
-        select(UserFavorite).where(
-            UserFavorite.user_id == current_user.id,
-            UserFavorite.video_id == video_id
-        )
-    )
-    favorite = result.scalar_one_or_none()
+    # 注意：当前未启用认证，跳过用户检查
+    # 如需认证，取消注释下面的代码
+    # result = await db.execute(
+    #     select(UserFavorite).where(
+    #         UserFavorite.user_id == current_user.id,
+    #         UserFavorite.video_id == video_id
+    #     )
+    # )
+    # favorite = result.scalar_one_or_none()
     
-    if favorite:
-        # 取消收藏
-        await db.delete(favorite)
-        await db.commit()
-        return FavoriteToggleResponse(is_favorited=False, message="已取消收藏")
-    else:
-        # 添加收藏
-        favorite = UserFavorite(user_id=current_user.id, video_id=video_id)
-        db.add(favorite)
-        await db.commit()
-        return FavoriteToggleResponse(is_favorited=True, message="已加入收藏")
+    return {"message": "收藏功能待实现"}
 
 
 @router.get("/{video_id}/subtitle")
 async def get_subtitle(
     video_id: int,
     db: AsyncSession = Depends(get_db),
-    # current_user: User = Depends(get_current_user_dependency)
 ):
     """获取视频字幕"""
     from ..models.subtitle import Subtitle
     
-    # 检查视频是否存在
     result = await db.execute(select(Video).where(Video.id == video_id))
     video = result.scalar_one_or_none()
     
@@ -548,7 +576,6 @@ async def get_subtitle(
     if not video.has_subtitle:
         raise HTTPException(status_code=404, detail="该视频暂无字幕")
     
-    # 获取字幕条目
     result = await db.execute(
         select(Subtitle)
         .where(Subtitle.video_id == video_id)
@@ -568,12 +595,10 @@ async def get_subtitle(
 async def get_summary(
     video_id: int,
     db: AsyncSession = Depends(get_db),
-    # current_user: User = Depends(get_current_user_dependency)
 ):
     """获取视频总结"""
     from ..models.summary import Summary
     
-    # 检查视频是否存在
     result = await db.execute(select(Video).where(Video.id == video_id))
     video = result.scalar_one_or_none()
     
@@ -583,7 +608,6 @@ async def get_summary(
     if not video.has_summary:
         raise HTTPException(status_code=404, detail="该视频暂无总结")
     
-    # 获取总结
     result = await db.execute(select(Summary).where(Summary.video_id == video_id))
     summary = result.scalar_one_or_none()
     
@@ -603,31 +627,26 @@ async def get_summary(
 async def process_video(
     video_id: int,
     db: AsyncSession = Depends(get_db),
-    # current_user: User = Depends(get_current_user_dependency)
 ):
     """处理视频（异步任务队列）"""
     from app.tasks.video_tasks import process_video_task
     
-    # 检查视频是否存在
     result = await db.execute(select(Video).where(Video.id == video_id))
     video = result.scalar_one_or_none()
     
     if not video:
         raise HTTPException(status_code=404, detail="视频不存在")
     
-    # 检查是否已处理
     if video.status == VideoStatus.SUMMARIZED:
         return {
             "message": "视频已处理完成",
             "status": video.status,
         }
     
-    # 更新状态为处理中
     video.status = VideoStatus.SUBTITLING
     video.updated_at = datetime.utcnow()
     await db.commit()
     
-    # 启动 Celery 异步任务
     task = process_video_task.delay(video_id)
     
     logger.info(f"🚀 视频处理任务已启动：video_id={video_id}, task_id={task.id}")
@@ -646,20 +665,17 @@ async def get_process_status(
     video_id: int,
     task_id: str = None,
     db: AsyncSession = Depends(get_db),
-    # current_user: User = Depends(get_current_user_dependency)
 ):
     """获取视频处理进度"""
     from app.tasks.video_tasks import get_task_progress
     from celery.result import AsyncResult
     
-    # 检查视频是否存在
     result = await db.execute(select(Video).where(Video.id == video_id))
     video = result.scalar_one_or_none()
     
     if not video:
         raise HTTPException(status_code=404, detail="视频不存在")
     
-    # 获取视频当前状态
     status_info = {
         "video_id": video_id,
         "video_status": video.status,
@@ -669,7 +685,6 @@ async def get_process_status(
         "processed_at": video.processed_at,
     }
     
-    # 如果有 task_id，获取 Celery 任务状态
     if task_id:
         task_result = AsyncResult(task_id, app=celery_app)
         status_info["task"] = {
@@ -679,46 +694,6 @@ async def get_process_status(
         }
     
     return status_info
-
-
-from fastapi import BackgroundTasks
-
-
-
-
-# 新的视频流端点（不需要认证）
-async def play_video(
-    video_id: int,
-    db: AsyncSession = Depends(get_db),
-):
-    """视频播放 - 不需要认证"""
-    # 获取视频信息
-    result = await db.execute(select(Video).where(Video.id == video_id))
-    video = result.scalar_one_or_none()
-    
-    if not video:
-        raise HTTPException(status_code=404, detail="视频不存在")
-    
-    # 检查文件是否存在
-    video_path = Path(video.filepath)
-    if not video_path.exists():
-        raise HTTPException(status_code=404, detail="视频文件不存在")
-    
-    # 使用 FileResponse 自动处理 Range 请求
-    # 设置正确的响应头
-    headers = {
-        'Accept-Ranges': 'bytes',
-        'Content-Type': 'video/mp4',
-        'Content-Disposition': f'inline; filename="{video.filename}"',
-        'Cache-Control': 'public, max-age=3600',
-    }
-    
-    return FileResponse(
-        str(video_path),
-        media_type='video/mp4',
-        filename=video.filename,
-        headers=headers,
-    )
 
 
 # 测试总结生成 API
@@ -731,7 +706,6 @@ async def test_summarize(
     from app.services.llm import LLMService
     from app.models.subtitle import Subtitle
     
-    # 获取视频字幕
     result = await db.execute(
         select(Subtitle)
         .where(Subtitle.video_id == video_id)
@@ -742,14 +716,11 @@ async def test_summarize(
     if not subtitles:
         raise HTTPException(status_code=404, detail="该视频没有字幕")
     
-    # 拼接字幕文本（限制长度）
     subtitle_text = "\n".join([sub.text for sub in subtitles[:100]])
     
-    # 获取视频标题
     video_result = await db.execute(select(Video).where(Video.id == video_id))
     video = video_result.scalar_one_or_none()
     
-    # 调用 LLM 生成总结
     llm_service = LLMService()
     result = await llm_service.summarize(
         subtitle_text=subtitle_text,
